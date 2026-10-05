@@ -1,0 +1,86 @@
+{
+  "programId": "protocol-bridges",
+  "name": "Ramp a SiLA 2 block, power a load over SCPI, set a Modbus PID controller",
+  "description": "Three devices behind generic protocols, each through a LabMCP bridge server, each narrowed by the workcell's command policy. Simulated unless the run is live.",
+  "schemaVersion": "0.2.0-alpha",
+  "startTrigger": { "type": "manual" },
+  "tracks": [
+    {
+      "trackId": "sila",
+      "name": "Thermoblock (SiLA 2)",
+      "steps": [
+        {
+          "stepId": "block-ramp",
+          "name": "Ramp the block to 37 °C",
+          "instrument": {
+            "tool": "block",
+            "command": "call_command",
+            "params": {
+              "feature": "TemperatureController",
+              "command": "ControlTemperature",
+              "parameters": { "TargetTemperature": 37 },
+              "wait_s": 120
+            }
+          },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "block-read",
+          "name": "Read the block temperature",
+          "instrument": {
+            "tool": "block",
+            "command": "get_property",
+            "params": { "feature": "TemperatureController", "property": "CurrentTemperature" }
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "block-ramp" }
+        }
+      ]
+    },
+    {
+      "trackId": "scpi",
+      "name": "Power supply (SCPI)",
+      "steps": [
+        {
+          "stepId": "psu-load",
+          "name": "Power the load at 5 V for 10 s",
+          "duration": { "type": "fixed", "seconds": 10 },
+          "instrument": {
+            "tool": "psu",
+            "start": [
+              { "command": "scpi_write", "params": { "command": "VOLT 5" } },
+              { "command": "scpi_write", "params": { "command": "OUTP ON" } }
+            ],
+            "end": [
+              { "command": "scpi_query", "params": { "command": "MEAS:VOLT?" } },
+              { "command": "scpi_write", "params": { "command": "OUTP OFF" } }
+            ]
+          },
+          "startTrigger": { "type": "programStart" }
+        }
+      ]
+    },
+    {
+      "trackId": "modbus",
+      "name": "PID controller (Modbus)",
+      "steps": [
+        {
+          "stepId": "pid-setpoint",
+          "name": "Set the setpoint to 40 °C",
+          "instrument": { "tool": "pid", "command": "write_point", "params": { "name": "setpoint", "value": 40 } },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "pid-read",
+          "name": "Read temperature and setpoint",
+          "instrument": {
+            "tool": "pid",
+            "command": "read_points",
+            "params": { "names": ["process_temperature", "setpoint"] }
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "pid-setpoint" }
+        }
+      ]
+    }
+  ],
+  "resourceConstraints": []
+}

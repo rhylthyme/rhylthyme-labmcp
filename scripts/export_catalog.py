@@ -132,8 +132,17 @@ def main(argv=None) -> int:
         results = dict(
             zip(pins, pool.map(lambda p: export_server(p, pins[p]), list(pins)))
         )
+    from rhylthyme_labmcp.checks import LIMIT_TARGETS
+    from rhylthyme_labmcp.compat import COMPAT
+
     catalog = {
         "schema": 1,
+        # Not LabMCP's: galago commands these servers stand in for
+        # (rhylthyme_labmcp/compat.py), for the hosted validator
+        "compat": COMPAT,
+        # Not LabMCP's: which param each misnamed limit bounds
+        # (rhylthyme_labmcp/checks.py LIMIT_TARGETS)
+        "limitTargets": LIMIT_TARGETS,
         "source": {
             "name": "LabMCP",
             "repository": REPOSITORY,

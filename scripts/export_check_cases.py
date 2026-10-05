@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping
 
 from rhylthyme_labmcp import load_catalog
-from rhylthyme_labmcp.checks import call_problems
+from rhylthyme_labmcp.checks import LIMIT_TARGETS, SERIES, server_entry
+from rhylthyme_labmcp.checks import RETURNS_EARLY_TOOLS, call_problems, timing_problems
 from rhylthyme_labmcp.estimates import estimate_call
 
 OUT = (
@@ -96,7 +97,7 @@ def cases() -> List[Dict[str, Any]]:
     out = []
     catalog = load_catalog()["packages"]
     for package in sorted(catalog):
-        entry = catalog[package]
+        entry = server_entry(package) or catalog[package]
         for command in sorted(entry.get("tools") or {}):
             schema = entry["tools"][command]["inputSchema"]
             props = schema.get("properties") or {}
@@ -106,6 +107,13 @@ def cases() -> List[Dict[str, Any]]:
             for name, prop in props.items():
                 for bad in _broken(prop):
                     calls.append({**valid, name: bad})
+            for limit, by_tool in sorted(LIMIT_TARGETS.get(package, {}).items()):
+                target = by_tool.get(command)
+                default = (entry.get("limits") or {}).get(limit, {}).get("default")
+                if target == SERIES and isinstance(default, (int, float)):
+                    calls.append({**valid, "count": 1000, "interval_s": default})
+                elif target and isinstance(default, (int, float)):
+                    calls.append({**valid, target: default + 1})
             for limit, spec in sorted((entry.get("limits") or {}).items()):
                 param = limit.split("_", 1)[1] if "_" in limit else ""
                 if param in props and isinstance(spec.get("default"), (int, float)):
@@ -147,10 +155,43 @@ def cases() -> List[Dict[str, Any]]:
     return out
 
 
+def timing_cases() -> List[Dict[str, Any]]:
+    """Each dose tool in each phase, with steps shorter and longer than it."""
+    doses = [
+        ("labmcp-new-era", "infuse", {"volume_ml": 2, "rate_ml_min": 4}),
+        ("labmcp-new-era", "withdraw", {"volume_ml": 0.5, "rate_ml_min": 7}),
+        ("labmcp-cavro", "dispense_ul", {"volume_ul": 250, "flow_ul_s": 50}),
+        ("labmcp-cavro", "aspirate_ul", {"volume_ul": 300}),
+        ("labmcp-ika", "set_speed", {"speed_rpm": 300}),
+    ]
+    assert {(p, c) for p, c, _ in doses} >= set(RETURNS_EARLY_TOOLS)
+    out = []
+    for package, command, params in doses:
+        for phase in ("call", "until", "start", "end"):
+            for seconds in (None, 1, 5, 60):
+                out.append(
+                    {
+                        "package": package,
+                        "command": command,
+                        "params": params,
+                        "phase": phase,
+                        "stepSeconds": seconds,
+                        "problems": [
+                            list(p)
+                            for p in timing_problems(
+                                package, command, params, phase, seconds
+                            )
+                        ],
+                    }
+                )
+    return out
+
+
 def main() -> int:
     data = {
         "source": load_catalog()["source"],
         "cases": cases(),
+        "timing": timing_cases(),
     }
     OUT.write_text(
         json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))

@@ -1,0 +1,19 @@
+{
+  "id": "ot2-bench",
+  "name": "OT-2 through LabMCP (simulated)",
+  "tools": [
+    {
+      "name": "ot2",
+      "driver": "labmcp",
+      "server": "opentrons",
+      "address": "http://ot2.local",
+      "options": {
+        "sim_model": "ot2"
+      },
+      "limits": {
+        "max_module_temperature_c": 95
+      },
+      "description": "LabMCP Opentrons server; sim_model only matters when simulated"
+    }
+  ]
+}

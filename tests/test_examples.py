@@ -8,10 +8,18 @@ from pathlib import Path
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
-PROGRAMS = ["tare-and-shake.json", "titration.json"]
+PROGRAMS = [
+    "tare-and-shake.json",
+    "titration.json",
+    "dosing.json",
+    "opentrons-transfer.json",
+]
 WORKCELLS = {
     "tare-and-shake.json": "workcell-mixed.json",
     "titration.json": "workcell-titration.json",
+    "dosing.json": "workcell-dosing.json",
+    "opentrons-transfer.json": "workcell-opentrons-labmcp.json",
+    "protocol-bridges.json": "workcell-protocol-bridges.json",
 }
 
 runner = pytest.importorskip("rhylthyme_cli_runner")
@@ -19,6 +27,15 @@ runner = pytest.importorskip("rhylthyme_cli_runner")
 
 def load(name):
     return json.loads((EXAMPLES / name).read_text())
+
+
+def test_the_opentrons_example_also_fits_galagos_workcell():
+    pytest.importorskip("rhylthyme_galago")
+    from rhylthyme_cli_runner.validate_program import perform_additional_validations
+
+    program = load("opentrons-transfer.json")
+    workcell = str(EXAMPLES / "workcell-opentrons-galago.json")
+    assert perform_additional_validations(program, workcell=workcell) == []
 
 
 @pytest.mark.parametrize("name", PROGRAMS)
@@ -177,3 +194,65 @@ def test_a_live_run_with_unreachable_instruments_is_refused(tmp_path, capsys):
     refusal = out[out.index("Live run refused") :]
     assert refusal.count("NOT_CONNECTED") == 3
     assert "rhylthyme-missing" not in refusal
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(shutil.which("uvx") is None, reason="needs uvx")
+def test_the_titration_published_through_the_bridge_names_no_address(tmp_path):
+    """Real servers, a fake rhylthyme.com: every row the bridge would write
+    for the titration run, aborted from the web, holds no workcell value."""
+    import base64
+
+    from rhylthyme_cli_runner.instruments import attach_instruments, start_bridge
+    from rhylthyme_cli_runner.program_runner import ProgramRunner
+
+    class Rest:
+        def __init__(self):
+            self.rows = []
+
+        def select(self, table, query):
+            return []
+
+        def upsert(self, table, row, on_conflict):
+            self.rows.append(json.loads(json.dumps(row)))
+
+        def patch(self, table, match, row):
+            self.rows.append(json.loads(json.dumps(row)))
+
+    token = (
+        "h." + base64.urlsafe_b64encode(b'{"sub": "u1"}').decode().rstrip("=") + ".s"
+    )
+    workcell = load("workcell-titration.json")
+    for i, tool in enumerate(workcell["tools"]):
+        tool["address"] = f"tcp://10.123.45.{60 + i}:5{i}321"
+    program = load("titration.json")
+    run = ProgramRunner(program, time_scale=100.0)
+    session = attach_instruments(run, workcell)
+    rest = Rest()
+    publisher = start_bridge(
+        run,
+        session,
+        program,
+        rest=rest,
+        token_fn=lambda: token,
+        config_path=tmp_path / "bridges.json",
+    )
+    try:
+        run.start()
+        run.command_queue.put("start_program")
+        deadline = time.time() + 60
+        while time.time() < deadline and run.steps["log-ph"].status.value != "RUNNING":
+            run.update()
+            time.sleep(0.05)
+        reason = "abort: 10.123.45.62 is overheating"
+        assert run.apply_remote_command({"kind": "abort", "args": {"reason": reason}})[
+            "accepted"
+        ]
+        session.finish(run, timeout=30)
+    finally:
+        publisher.stop()
+        session.shutdown()
+    text = json.dumps(rest.rows)
+    assert "10.123.45" not in text
+    assert not [port for port in ("50321", "51321", "52321") if port in text]
+    assert '"status": "aborted"' in text

@@ -9,7 +9,12 @@ A LabMCP tool in a (local, never shared) workcell file::
      "options": {"baudrate": "9600"},             # passed as --option
      "timeoutSeconds": 30}
 
-``url`` instead of ``server`` points at a server already running over HTTP.
+``url`` points at a server already running over streamable HTTP
+(``labmcp-<package> --transport http``, on another machine or in a
+container): nothing is launched, and ``server`` (optional with ``url``) only
+names the package, so steps are checked against its catalogue entry. Such a
+server keeps the limits it was started with; the workcell's ``limits`` are
+then a requirement the pre-flight checks rather than settings it passes.
 Programs refer to tools only by ``name``.
 """
 
@@ -47,7 +52,9 @@ class LabMCPTool:
     @property
     def kind(self) -> str:
         """The server, as shown next to the tool name."""
-        return self.package or "labmcp (http)"
+        if self.url:
+            return f"{self.package} (http)" if self.package else "labmcp (http)"
+        return self.package
 
     @property
     def location(self) -> str:
@@ -55,10 +62,66 @@ class LabMCPTool:
         return self.url or self.address or "no address"
 
     def private_values(self) -> List[str]:
-        """Every local value that must never leave the machine."""
-        values = [self.address, self.url]
-        values += [v for v in self.options.values() if isinstance(v, str)]
-        return [v for v in values if v]
+        """
+        Every local value that must never leave the machine, in each form it
+        may appear in an error message: the address and its parts (serial
+        device, TCP host and port, VISA resource parts), the server URL and
+        its host, and every option value.
+        """
+        values = address_variants(self.address) + address_variants(self.url)
+        values += [v for v in self.options.values() if isinstance(v, str) and v]
+        seen: Dict[str, None] = {}
+        for v in values:
+            seen.setdefault(v, None)
+        return list(seen)
+
+
+#: VISA resource words that name no particular instrument.
+_VISA_WORDS = re.compile(
+    r"^(?:(?:TCPIP|GPIB|USB|ASRL|PXI|VXI|GPIB-VXI)\d*|INSTR|SOCKET|INTFC|BACKPLANE"
+    r"|inst\d+|hislip\d+)$",
+    re.IGNORECASE,
+)
+
+
+def address_variants(address: str) -> List[str]:
+    """
+    A LabMCP address (or server URL) and the parts of it that identify the
+    instrument: ``tcp://10.1.2.3:4001`` -> the address, ``10.1.2.3:4001``,
+    ``('10.1.2.3', 4001)``, ``10.1.2.3``; ``serial:///dev/ttyUSB0?baudrate=9600``
+    -> the address, ``/dev/ttyUSB0``, ``ttyUSB0``; ``TCPIP0::10.1.2.9::INSTR`` ->
+    the resource and ``10.1.2.9``.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    address = (address or "").strip()
+    if not address:
+        return []
+    out = [address]
+    bare = address.split("?", 1)[0]
+    out.append(bare)
+    scheme, sep, rest = bare.partition("://")
+    target = unquote(rest) if sep else bare
+    if sep and scheme.lower() in ("tcp", "http", "https"):
+        parts = urlsplit(f"//{rest}")
+        if parts.hostname:
+            if parts.port:
+                out += [
+                    f"{parts.hostname}:{parts.port}",
+                    f"('{parts.hostname}', {parts.port})",
+                ]
+            out.append(parts.hostname)
+        return [v for v in dict.fromkeys(out) if v]
+    out.append(target)
+    if "::" in target:  # VISA: TCPIP0::10.1.2.9::inst0::INSTR
+        out += [
+            p for p in target.split("::") if len(p) >= 4 and not _VISA_WORDS.match(p)
+        ]
+    elif "/" in target:  # serial device path
+        name = target.rstrip("/").rsplit("/", 1)[-1]
+        if len(name) >= 5:
+            out.append(name)
+    return [v for v in dict.fromkeys(out) if v]
 
 
 def _number(where: str, key: str, value: Any) -> float:
@@ -112,15 +175,20 @@ def parse_tool(index: int, raw: Any) -> LabMCPTool:
         raise WorkcellError(f"{where} is missing name")
     where = f"{where} ({name!r})"
     server, url = raw.get("server"), raw.get("url")
-    if bool(server) == bool(url):
-        raise WorkcellError(f"{where} needs exactly one of server or url")
+    if not server and not url:
+        raise WorkcellError(f"{where} needs a server (to launch) or a url")
     package = version = ""
     if server:
         package, version = _package(where, server)
         if raw.get("version"):
             version = str(raw["version"])
-    elif not str(url).startswith(("http://", "https://")):
+    if url and not str(url).startswith(("http://", "https://")):
         raise WorkcellError(f"{where} url must start with http:// or https://")
+    if url and raw.get("options"):
+        raise WorkcellError(
+            f"{where} options cannot be passed to a server reached by url; "
+            "set them where it is started"
+        )
     limits_raw = raw.get("limits") or {}
     if not isinstance(limits_raw, dict):
         raise WorkcellError(f"{where} limits must be an object")

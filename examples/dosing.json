@@ -1,0 +1,64 @@
+{
+  "programId": "dosing",
+  "name": "Dose from two syringe pumps",
+  "description": "A New Era pump infuses 2 mL while a Tecan Cavro pump draws 500 µL and dispenses it in two doses. Simulated unless the run is live.",
+  "schemaVersion": "0.2.0-alpha",
+  "startTrigger": { "type": "manual" },
+  "tracks": [
+    {
+      "trackId": "new-era",
+      "name": "New Era pump",
+      "steps": [
+        {
+          "stepId": "ne-syringe",
+          "name": "Set the syringe (BD 10 mL, 14.43 mm)",
+          "instrument": { "tool": "pump", "command": "set_syringe", "params": { "diameter_mm": 14.43 } },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "ne-infuse",
+          "name": "Infuse 2 mL at 4 mL/min",
+          "description": "infuse returns once pumping starts, so the step runs on its own duration (2 mL / 4 mL/min = 30 s, plus a margin) and reads back the dispensed volume at the end.",
+          "duration": { "type": "fixed", "seconds": 35 },
+          "instrument": {
+            "tool": "pump",
+            "start": [{ "command": "infuse", "params": { "volume_ml": 2, "rate_ml_min": 4 } }],
+            "end": [{ "command": "get_dispensed_volume" }]
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "ne-syringe" }
+        }
+      ]
+    },
+    {
+      "trackId": "cavro",
+      "name": "Cavro pump",
+      "steps": [
+        {
+          "stepId": "cv-init",
+          "name": "Initialize (valve output to waste)",
+          "instrument": { "tool": "cavro", "command": "initialize" },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "cv-draw",
+          "name": "Draw 500 µL",
+          "instrument": { "tool": "cavro", "command": "aspirate_ul", "params": { "volume_ul": 500, "flow_ul_s": 100 } },
+          "startTrigger": { "type": "afterStep", "stepId": "cv-init" }
+        },
+        {
+          "stepId": "cv-dose-1",
+          "name": "Dispense 250 µL",
+          "instrument": { "tool": "cavro", "command": "dispense_ul", "params": { "volume_ul": 250, "flow_ul_s": 50 } },
+          "startTrigger": { "type": "afterStep", "stepId": "cv-draw" }
+        },
+        {
+          "stepId": "cv-dose-2",
+          "name": "Dispense 250 µL",
+          "instrument": { "tool": "cavro", "command": "dispense_ul", "params": { "volume_ul": 250, "flow_ul_s": 50 } },
+          "startTrigger": { "type": "afterStep", "stepId": "cv-dose-1" }
+        }
+      ]
+    }
+  ],
+  "resourceConstraints": []
+}

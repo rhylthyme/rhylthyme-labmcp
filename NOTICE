@@ -13,5 +13,10 @@ limits of each LabMCP server package, as the servers report them in --simulate
 mode, exported by scripts/export_catalog.py at the versions it records.
 Modified only by selection and layout.
 
+src/rhylthyme_labmcp/_vendor/scpi_policy.py is LabMCP's
+servers/protocols/scpi-instrument/src/labmcp_scpi/policy.py at commit 46545ea
+(labmcp-scpi 0.1.3), modified only to define SafetyLimitError locally instead
+of importing it from the labmcp package.
+
 rhylthyme-labmcp is not affiliated with or endorsed by K-Dense.
 "LabMCP" is used here only to identify the software this package works with.

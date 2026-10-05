@@ -1,0 +1,10 @@
+{
+  "id": "dosing-bench",
+  "name": "Dosing bench (simulated)",
+  "tools": [
+    { "name": "pump", "driver": "labmcp", "server": "new-era", "address": "/dev/ttyUSB3",
+      "limits": { "max_volume_ml": 10, "max_rate_ml_min": 5 } },
+    { "name": "cavro", "driver": "labmcp", "server": "cavro", "address": "/dev/ttyUSB4",
+      "options": { "syringe_ul": "1000" }, "limits": { "max_volume_ul": 1000 } }
+  ]
+}

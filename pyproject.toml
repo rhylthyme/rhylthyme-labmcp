@@ -25,11 +25,17 @@ dev = ["pytest>=8"]
 Homepage = "https://rhylthyme.com"
 Source = "https://github.com/rhylthyme/rhylthyme-labmcp"
 
+[tool.setuptools]
+# Only [tool.setuptools.package-data] goes into the wheel (MANIFEST.in is for the sdist)
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-rhylthyme_labmcp = ["py.typed", "catalog/*.json"]
+# The catalogue; the parity cases (catalog/labmcp-check-cases.json) are for
+# tests and the hosted validator only, so they stay in the sdist, not the wheel
+rhylthyme_labmcp = ["py.typed", "catalog/labmcp-catalog.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

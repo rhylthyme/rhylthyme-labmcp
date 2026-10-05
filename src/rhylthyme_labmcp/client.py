@@ -7,6 +7,7 @@ for the whole run, and offers blocking calls to any thread.
 
 import asyncio
 import concurrent.futures
+import contextlib
 import json
 import os
 import shutil
@@ -14,7 +15,17 @@ import tempfile
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Tuple,
+)
 
 #: Reply codes. SUCCESS and TOOL_ERROR come from the server; the others mean
 #: the call never got an answer.
@@ -154,7 +165,7 @@ class StdioServerClient:
             prefix=f"labmcp-{name}-", suffix=".log", dir=log_dir
         )
         os.close(fd)
-        self.log_path = Path(path)
+        self.log_path: Optional[Path] = Path(path)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._task: Optional[concurrent.futures.Future] = None
@@ -178,24 +189,36 @@ class StdioServerClient:
             ) from None
         except Exception as e:
             self.close()
-            raise ServerError(_error_text(e) + self._log_tail()) from None
+            # _serve already formatted it ("ConnectTimeout: ...")
+            raise ServerError(self._failed(str(e)) + self._log_tail()) from None
 
-    async def _serve(self) -> None:
-        from mcp import ClientSession, StdioServerParameters
+    def _failed(self, reason: str) -> str:
+        return reason
+
+    @contextlib.asynccontextmanager
+    async def _streams(self) -> AsyncIterator[Tuple[Any, Any]]:
+        """The server's read and write streams: a launched process's stdio."""
+        from mcp import StdioServerParameters
         from mcp.client.stdio import stdio_client
 
-        self._stop = asyncio.Event()
         params = StdioServerParameters(
             command=self.command, args=self.args, env=self.env
         )
+        with open(self.log_path, "a") as errlog:
+            async with stdio_client(params, errlog=errlog) as streams:
+                yield streams[0], streams[1]
+
+    async def _serve(self) -> None:
+        from mcp import ClientSession
+
+        self._stop = asyncio.Event()
         try:
-            with open(self.log_path, "a") as errlog:
-                async with stdio_client(params, errlog=errlog) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        self._session = session
-                        self._ready.set_result(True)
-                        await self._stop.wait()
+            async with self._streams() as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    self._session = session
+                    self._ready.set_result(True)
+                    await self._stop.wait()
         except BaseException as e:  # noqa: BLE001 - reported through _ready
             if not self._ready.done():
                 self._ready.set_exception(Exception(_error_text(e)))
@@ -203,6 +226,8 @@ class StdioServerClient:
             self._session = None
 
     def _log_tail(self, lines: int = 5) -> str:
+        if self.log_path is None:
+            return ""
         try:
             tail = self.log_path.read_text(errors="replace").strip().splitlines()
         except OSError:
@@ -272,6 +297,55 @@ class StdioServerClient:
         if not loop.is_running():
             loop.close()
         self._loop = None
+
+
+class HttpServerClient(StdioServerClient):
+    """
+    A LabMCP server already running elsewhere (``--transport http``), spoken
+    to over MCP streamable HTTP for one run. Nothing is launched or stopped:
+    ``close`` only ends this client's session. The server runs in whatever
+    mode and with whatever limits it was started with; the executor checks
+    both against the run before it starts.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        name: str = "labmcp",
+        headers: Optional[Mapping[str, str]] = None,
+    ):
+        self.url = url
+        self.headers = dict(headers or {})
+        self.command, self.args, self.env = "", [], None
+        self.name = name
+        self.log_path = None
+        self._loop = None
+        self._thread = None
+        self._task = None
+        self._ready = concurrent.futures.Future()
+        self._session = None
+        self._stop = None
+
+    def _failed(self, reason: str) -> str:
+        return f"could not reach the server at {self.url} ({reason})"
+
+    @contextlib.asynccontextmanager
+    async def _streams(self) -> AsyncIterator[Tuple[Any, Any]]:
+        try:  # mcp 2.x
+            from mcp.client.streamable_http import streamable_http_client as connect
+        except ImportError:  # mcp 1.x
+            from mcp.client.streamable_http import streamablehttp_client as connect
+
+        if self.headers:
+            from mcp.client.streamable_http import create_mcp_http_client
+
+            http = create_mcp_http_client(headers=self.headers)
+            async with http, connect(self.url, http_client=http) as streams:
+                yield streams[0], streams[1]
+        else:
+            async with connect(self.url) as streams:
+                yield streams[0], streams[1]
 
 
 class FakeServerClient:

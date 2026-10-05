@@ -1,0 +1,17 @@
+{
+  "id": "ot2-bench",
+  "name": "OT-2 through galago-tools (simulated)",
+  "tools": [
+    {
+      "name": "ot2",
+      "type": "opentrons2",
+      "host": "localhost",
+      "port": 50720,
+      "config": {
+        "robot_ip": "ot2.local",
+        "robot_port": 31950
+      },
+      "description": "galago-tools Opentrons (galago-serve --tool opentrons2 --port 50720)"
+    }
+  ]
+}

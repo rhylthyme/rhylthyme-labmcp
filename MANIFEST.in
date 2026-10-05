@@ -1,3 +1,7 @@
-include LICENSE NOTICE README.md
+include LICENSE NOTICE README.md CHANGELOG.md
 recursive-include LICENSES *
 recursive-include src/rhylthyme_labmcp/catalog *.json
+recursive-include docs *.md
+recursive-include examples *.json
+recursive-include scripts *.py
+recursive-include tests *.py

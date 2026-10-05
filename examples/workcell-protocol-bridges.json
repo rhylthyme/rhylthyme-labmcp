@@ -1,0 +1,22 @@
+{
+  "id": "protocol-bench",
+  "name": "Protocol bridges (simulated)",
+  "tools": [
+    {
+      "name": "block", "driver": "labmcp", "server": "sila2", "address": "192.168.1.20:50052",
+      "options": { "command_allowlist": "TemperatureController.*" },
+      "limits": { "max_command_wait_s": 180 },
+      "description": "SiLA 2 server; only its TemperatureController commands may be called"
+    },
+    {
+      "name": "psu", "driver": "labmcp", "server": "scpi", "address": "tcp://192.168.1.21:5025",
+      "options": { "write_denylist": "^VOLT\\s+(?:[1-9]\\d|\\d{3,})", "safe_state": "OUTP OFF" },
+      "description": "SCPI power supply; never 10 V or more; the safe state switches the output off"
+    },
+    {
+      "name": "pid", "driver": "labmcp", "server": "modbus", "address": "tcp://192.168.1.22:502",
+      "options": { "raw_writes": "false" },
+      "description": "Modbus PID controller; named points from its register map only"
+    }
+  ]
+}

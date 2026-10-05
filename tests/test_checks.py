@@ -178,6 +178,14 @@ def test_workcell_entries_are_checked():
     assert "max_speed_rpm, max_temperature_c, max_wait_s" in issues[0].message
 
 
+def test_url_tools_without_a_server_are_not_checked_and_say_so():
+    tools = parse_tools([{"name": "remote", "url": "http://lab:8000/mcp"}])
+    [issue] = check_workcell(tools)
+    assert (issue.code, issue.severity) == ("workcell_url_unchecked", "warning")
+    issues = check_calls(program({"tool": "remote", "command": "anything"}), tools)
+    assert issues == []
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(shutil.which("uvx") is None, reason="needs uvx")
 def test_the_vendored_catalogue_matches_a_fresh_export():
@@ -200,3 +208,119 @@ def test_the_check_cases_are_fresh():
     vendored = json.loads(OUT.read_text())
     assert vendored["source"] == load_catalog()["source"]
     assert vendored["cases"] == json.loads(json.dumps(cases()))
+    from export_check_cases import timing_cases
+
+    assert vendored["timing"] == json.loads(json.dumps(timing_cases()))
+
+
+def test_galago_opentrons_commands_are_checked_on_labmcp_opentrons():
+    from rhylthyme_labmcp.checks import call_problems
+    from rhylthyme_labmcp.estimates import estimate_call
+
+    assert (
+        call_problems("labmcp-opentrons", "run_program", {"script_content": "x"}) == []
+    )
+    assert call_problems("labmcp-opentrons", "cancel", {}) == []
+    [(code, problem)] = call_problems("labmcp-opentrons", "run_program", {})
+    assert problem == "'script_content' is a required property"
+    [(code, problem)] = call_problems(
+        "labmcp-opentrons",
+        "run_program",
+        {"script_content": "x", "variables": {"a": 1}},
+    )
+    assert problem == "variables: {'a': 1} is expected to be empty"
+    assert estimate_call("labmcp-opentrons", "run_program", {}).seconds == 600
+
+
+# --- Protocol-bridge policies (phase 13) ---------------------------------------
+
+POLICY_TOOLS = parse_tools(
+    [
+        {
+            "name": "block",
+            "server": "sila2",
+            "options": {"command_allowlist": "Shaker.*, Lid.Open"},
+        },
+        {
+            "name": "psu",
+            "server": "scpi",
+            "options": {
+                "write_denylist": r"^OUTP\d*(:STAT)? (?!OFF\b)",
+                "query_denylist": "^MEAS",
+            },
+        },
+        {"name": "plc", "server": "modbus", "options": {"raw_writes": "false"}},
+        {"name": "plc2", "server": "modbus"},
+    ]
+)
+
+
+@pytest.mark.parametrize(
+    "tool, command, params, refused",
+    [
+        ("block", "call_command", {"feature": "Shaker", "command": "Shake"}, False),
+        ("block", "call_command", {"feature": "lid", "command": "open"}, False),
+        ("block", "call_command", {"feature": "Lid", "command": "Close"}, True),
+        ("psu", "scpi_write", {"command": "OUTP OFF"}, False),
+        ("psu", "scpi_write", {"command": ":OUTPut1:STATe ON"}, True),
+        ("psu", "scpi_write", {"command": "VOLT 2;OUTP 1"}, True),
+        ("psu", "scpi_batch", {"steps": ["VOLT 2", "OUTP ON"]}, True),
+        ("psu", "scpi_query", {"command": "MEAS:VOLT?"}, True),
+        ("psu", "scpi_query", {"command": "*TST?"}, True),
+        ("psu", "scpi_query", {"command": "FETC?"}, False),
+        ("plc", "write_register", {"address": 1, "value": 2}, True),
+        ("plc", "write_point", {"name": "setpoint", "value": 2}, False),
+        ("plc2", "write_register", {"address": 1, "value": 2}, False),
+    ],
+)
+def test_server_policies_are_applied_before_the_run(tool, command, params, refused):
+    issues = check_calls(
+        program({"tool": tool, "command": command, "params": params}), POLICY_TOOLS
+    )
+    found = [i for i in issues if i.code == "instrument_refused_by_policy"]
+    assert bool(found) is refused, [i.message for i in issues]
+
+
+def test_bad_policy_options_are_workcell_errors():
+    tools = parse_tools(
+        [
+            {"name": "a", "server": "scpi", "options": {"write_denylist": "(unclosed"}},
+            {"name": "b", "server": "sila2", "options": {"command_allowlist": "NoDot"}},
+        ]
+    )
+    codes = [(i.code, i.severity) for i in check_workcell(tools)]
+    assert codes == [("workcell_invalid_policy", "error")] * 2
+
+
+def test_misnamed_limits_bound_their_params():
+    tools = parse_tools(
+        [{"name": "block", "server": "sila2", "limits": {"max_command_wait_s": 60}}]
+    )
+    [issue] = check_calls(
+        program(
+            {
+                "tool": "block",
+                "command": "call_command",
+                "params": {"feature": "A", "command": "B", "wait_s": 90},
+            }
+        ),
+        tools,
+    )
+    assert issue.message.endswith(
+        "wait_s=90 is above the workcell's limit max_command_wait_s=60 s"
+    )
+    # A series' duration, with the tool's defaults for what is left out
+    [issue] = check_calls(
+        program(
+            {
+                "tool": "b",
+                "toolType": "labmcp-mettler-toledo",
+                "command": "log_weight_series",
+                "params": {"count": 1000, "interval_s": 1},
+            }
+        )
+    )
+    assert (
+        "series (count - 1) × interval_s=999 is above the server's default limit"
+        in issue.message
+    )
