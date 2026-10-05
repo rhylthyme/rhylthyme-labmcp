@@ -1,0 +1,38 @@
+{
+  "programId": "tare-and-shake",
+  "name": "Tare a balance, then shake a plate",
+  "description": "One LabMCP step (a Mettler Toledo balance) and one galago step (a Bioshake), both simulated by default.",
+  "startTrigger": { "type": "manual" },
+  "tracks": [
+    {
+      "trackId": "bench",
+      "name": "Bench",
+      "steps": [
+        {
+          "stepId": "tare",
+          "name": "Tare the balance",
+          "instrument": { "tool": "balance", "command": "tare" },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "weigh",
+          "name": "Read the weight",
+          "instrument": { "tool": "balance", "command": "read_weight", "params": { "stable": true } },
+          "startTrigger": { "type": "afterStep", "stepId": "tare" }
+        },
+        {
+          "stepId": "shake",
+          "name": "Shake at 1000 rpm",
+          "instrument": {
+            "tool": "shaker",
+            "toolType": "bioshake",
+            "command": "start_shake",
+            "params": { "speed": 1000, "acceleration": 5, "duration": 5 }
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "weigh" }
+        }
+      ]
+    }
+  ],
+  "resourceConstraints": []
+}

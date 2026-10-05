@@ -1,0 +1,17 @@
+rhylthyme-labmcp
+Copyright 2026 Rhylthyme contributors
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product works with LabMCP (https://github.com/K-Dense-AI/lab-instrument-mcps),
+open-source MCP servers for laboratory instruments by K-Dense, licensed under
+the Apache License, Version 2.0 (see LICENSES/LabMCP-LICENSE). LabMCP servers
+are not bundled: the runner launches the published packages (uvx labmcp-...).
+
+src/rhylthyme_labmcp/catalog/labmcp-catalog.json contains material derived from
+LabMCP: the tool names, kinds, descriptions and input schemas and the safety
+limits of each LabMCP server package, as the servers report them in --simulate
+mode, exported by scripts/export_catalog.py at the versions it records.
+Modified only by selection and layout.
+
+rhylthyme-labmcp is not affiliated with or endorsed by K-Dense.
+"LabMCP" is used here only to identify the software this package works with.

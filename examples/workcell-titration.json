@@ -1,0 +1,10 @@
+{
+  "id": "titration-bench",
+  "name": "Titration bench (simulated)",
+  "tools": [
+    { "name": "balance", "driver": "labmcp", "server": "mettler-toledo", "address": "/dev/ttyUSB0" },
+    { "name": "stirrer", "driver": "labmcp", "server": "ika", "address": "/dev/ttyUSB1",
+      "limits": { "max_temperature_c": 80 } },
+    { "name": "ph", "driver": "labmcp", "server": "atlas-ezo", "address": "/dev/ttyUSB2" }
+  ]
+}

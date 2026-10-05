@@ -1,0 +1,3 @@
+include LICENSE NOTICE README.md
+recursive-include LICENSES *
+recursive-include src/rhylthyme_labmcp/catalog *.json

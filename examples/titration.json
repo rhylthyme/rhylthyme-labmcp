@@ -1,0 +1,60 @@
+{
+  "programId": "titration-prep",
+  "name": "Weigh, heat and stir, then log pH until stable",
+  "description": "Three LabMCP instruments: a Mettler Toledo balance, an IKA hotplate stirrer and an Atlas Scientific EZO pH probe. Simulated unless the run is live.",
+  "schemaVersion": "0.2.0-alpha",
+  "startTrigger": { "type": "manual" },
+  "tracks": [
+    {
+      "trackId": "bench",
+      "name": "Bench",
+      "steps": [
+        {
+          "stepId": "tare",
+          "name": "Tare the balance",
+          "instrument": { "tool": "balance", "command": "tare" },
+          "startTrigger": { "type": "programStart" }
+        },
+        {
+          "stepId": "weigh",
+          "name": "Weigh the sample",
+          "instrument": { "tool": "balance", "command": "read_weight", "params": { "stable": true } },
+          "startTrigger": { "type": "afterStep", "stepId": "tare" }
+        },
+        {
+          "stepId": "heat-stir",
+          "name": "Heat to 40 °C and stir at 400 rpm for 2 minutes",
+          "duration": { "type": "fixed", "seconds": 120 },
+          "instrument": {
+            "tool": "stirrer",
+            "start": [
+              { "command": "set_temperature", "params": { "temperature_c": 40 } },
+              { "command": "set_speed", "params": { "speed_rpm": 400 } },
+              { "command": "start_heating" },
+              { "command": "start_stirring" }
+            ],
+            "end": [{ "command": "stop_heating" }]
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "weigh" }
+        },
+        {
+          "stepId": "log-ph",
+          "name": "Stir gently and log pH until stable",
+          "instrument": {
+            "tool": "ph",
+            "start": [{ "tool": "stirrer", "command": "set_speed", "params": { "speed_rpm": 150 } }],
+            "until": { "command": "log_series", "params": { "count": 10, "interval_s": 3 }, "timeoutSeconds": 120 }
+          },
+          "startTrigger": { "type": "afterStep", "stepId": "heat-stir" }
+        },
+        {
+          "stepId": "stop",
+          "name": "Stop the stirrer",
+          "instrument": { "tool": "stirrer", "command": "stop_all" },
+          "startTrigger": { "type": "afterStep", "stepId": "log-ph" }
+        }
+      ]
+    }
+  ],
+  "resourceConstraints": []
+}

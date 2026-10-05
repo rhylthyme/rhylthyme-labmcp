@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rhylthyme-labmcp"
+version = "0.1.0a0"
+description = "Run LabMCP lab-instrument MCP servers from Rhylthyme schedules"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "LICENSES/*"]
+requires-python = ">=3.12"
+authors = [{ name = "Rhylthyme" }]
+dependencies = [
+    # The MCP client the runner talks to each LabMCP server with
+    "mcp>=1.9",
+    # Checks steps against the catalogued tools' input schemas
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://rhylthyme.com"
+Source = "https://github.com/rhylthyme/rhylthyme-labmcp"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rhylthyme_labmcp = ["py.typed", "catalog/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: launches real LabMCP servers with uvx (simulated)"]

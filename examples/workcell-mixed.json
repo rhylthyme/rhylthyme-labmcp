@@ -1,0 +1,21 @@
+{
+  "id": "mixed-bench",
+  "name": "Mixed bench (simulated)",
+  "tools": [
+    {
+      "name": "balance",
+      "driver": "labmcp",
+      "server": "mettler-toledo",
+      "address": "/dev/ttyUSB0",
+      "description": "LabMCP Mettler Toledo balance; simulated unless the run is live"
+    },
+    {
+      "name": "shaker",
+      "type": "bioshake",
+      "host": "localhost",
+      "port": 50710,
+      "config": { "com_port": "COM3" },
+      "description": "galago-tools Bioshake (galago-serve --tool bioshake --port 50710)"
+    }
+  ]
+}
