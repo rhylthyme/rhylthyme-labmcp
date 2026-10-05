@@ -18,7 +18,11 @@ jobs:
       - name: rhylthyme-labmcp and the Rhylthyme runner
         run: |
           python -m pip install --quiet --upgrade pip
-          pip install --quiet -e ".[dev]" "rhylthyme-cli-runner @ git+https://github.com/rhylthyme/rhylthyme-cli-runner"
+          # The runner and the spec from their main branches, so CI checks against
+          # the schema and runner this package is developed with
+          pip install --quiet -e ".[dev]" \
+            "rhylthyme-spec @ git+https://github.com/rhylthyme/rhylthyme-spec" \
+            "rhylthyme-cli-runner @ git+https://github.com/rhylthyme/rhylthyme-cli-runner"
       - name: Unit tests
         run: pytest -m "not integration"
       - name: Integration tests (real LabMCP servers, simulated)
