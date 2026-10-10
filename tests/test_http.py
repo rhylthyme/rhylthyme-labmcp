@@ -90,9 +90,9 @@ def test_a_run_uses_a_server_started_separately(http_server):
 def test_the_runner_runs_a_program_on_it(http_server, tmp_path):
     import json
 
-    runner_mod = pytest.importorskip("rhylthyme_cli_runner.program_runner")
-    from rhylthyme_cli_runner.history.recorder import RunRecorder
-    from rhylthyme_cli_runner.instruments import attach_instruments
+    runner_mod = pytest.importorskip("rhylthyme.program_runner")
+    from rhylthyme.history.recorder import RunRecorder
+    from rhylthyme.instruments import attach_instruments
 
     url, _ = http_server
     program = {
