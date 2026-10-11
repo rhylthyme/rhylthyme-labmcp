@@ -12,7 +12,7 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(shutil.which("uvx") is None, reason="needs uvx"),
 ]
-pytest.importorskip("rhylthyme_cli_runner")
+pytest.importorskip("rhylthyme")
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -23,10 +23,10 @@ def load(name):
 
 def run(program, workcell, tmp_path, until=None, timeout=120):
     """Run on the real simulated servers, at real time; return the record."""
-    from rhylthyme_cli_runner.history.recorder import RunRecorder
-    from rhylthyme_cli_runner.history.store import validate_run
-    from rhylthyme_cli_runner.instruments import attach_instruments
-    from rhylthyme_cli_runner.program_runner import ProgramRunner
+    from rhylthyme.history.recorder import RunRecorder
+    from rhylthyme.history.store import validate_run
+    from rhylthyme.instruments import attach_instruments
+    from rhylthyme.program_runner import ProgramRunner
 
     runner = ProgramRunner(copy.deepcopy(program), time_scale=1.0)
     recorder = RunRecorder(

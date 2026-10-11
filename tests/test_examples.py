@@ -22,7 +22,7 @@ WORKCELLS = {
     "protocol-bridges.json": "workcell-protocol-bridges.json",
 }
 
-runner = pytest.importorskip("rhylthyme_cli_runner")
+runner = pytest.importorskip("rhylthyme")
 
 
 def load(name):
@@ -31,7 +31,7 @@ def load(name):
 
 def test_the_opentrons_example_also_fits_galagos_workcell():
     pytest.importorskip("rhylthyme_galago")
-    from rhylthyme_cli_runner.validate_program import perform_additional_validations
+    from rhylthyme.validate_program import perform_additional_validations
 
     program = load("opentrons-transfer.json")
     workcell = str(EXAMPLES / "workcell-opentrons-galago.json")
@@ -40,7 +40,7 @@ def test_the_opentrons_example_also_fits_galagos_workcell():
 
 @pytest.mark.parametrize("name", PROGRAMS)
 def test_examples_validate_against_the_workcell(name):
-    from rhylthyme_cli_runner.validate_program import (
+    from rhylthyme.validate_program import (
         perform_additional_validations,
         validate_program,
     )
@@ -63,10 +63,10 @@ def test_examples_validate_against_the_workcell(name):
 @pytest.mark.integration
 @pytest.mark.skipif(shutil.which("uvx") is None, reason="needs uvx")
 def test_titration_runs_to_completion_in_simulate_mode(tmp_path):
-    from rhylthyme_cli_runner.history.recorder import RunRecorder
-    from rhylthyme_cli_runner.history.store import validate_run
-    from rhylthyme_cli_runner.instruments import attach_instruments
-    from rhylthyme_cli_runner.program_runner import ProgramRunner
+    from rhylthyme.history.recorder import RunRecorder
+    from rhylthyme.history.store import validate_run
+    from rhylthyme.instruments import attach_instruments
+    from rhylthyme.program_runner import ProgramRunner
 
     program = load("titration.json")
     workcell = load("workcell-titration.json")
@@ -117,10 +117,10 @@ def test_a_refused_setpoint_stops_the_stirrer_and_abort_stops_the_rest(tmp_path)
     """The workcell caps the stirrer at 80 °C; asking for 120 °C fails the
     step with the server's refusal, its default safety tools are sent, and
     aborting the run stops the other instruments it used."""
-    from rhylthyme_cli_runner.history.recorder import RunRecorder
-    from rhylthyme_cli_runner.history.store import validate_run
-    from rhylthyme_cli_runner.instruments import attach_instruments
-    from rhylthyme_cli_runner.program_runner import ProgramRunner, StepStatus
+    from rhylthyme.history.recorder import RunRecorder
+    from rhylthyme.history.store import validate_run
+    from rhylthyme.instruments import attach_instruments
+    from rhylthyme.program_runner import ProgramRunner, StepStatus
 
     program = load("titration.json")
     heat = program["tracks"][0]["steps"][2]
@@ -172,7 +172,7 @@ def test_a_live_run_with_unreachable_instruments_is_refused(tmp_path, capsys):
     """Live servers on ports that do not exist: the pre-flight shows each
     instrument's mode and limits and every hazard action, then refuses the
     run before anything is sent, without printing an address."""
-    from rhylthyme_cli_runner.program_runner import run_program
+    from rhylthyme.cli.tui import run_program
 
     workcell = load("workcell-titration.json")
     for i, tool in enumerate(workcell["tools"]):
@@ -203,8 +203,9 @@ def test_the_titration_published_through_the_bridge_names_no_address(tmp_path):
     for the titration run, aborted from the web, holds no workcell value."""
     import base64
 
-    from rhylthyme_cli_runner.instruments import attach_instruments, start_bridge
-    from rhylthyme_cli_runner.program_runner import ProgramRunner
+    from rhylthyme.cli.bridge import start_bridge
+    from rhylthyme.instruments import attach_instruments
+    from rhylthyme.program_runner import ProgramRunner
 
     class Rest:
         def __init__(self):
